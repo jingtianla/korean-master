@@ -22,7 +22,7 @@ jobs:
       image_tag: ${{ steps.vars.outputs.image_tag }}
     steps:
       - name: 检出代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 计算短 SHA 与镜像标签
         id: vars

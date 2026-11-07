@@ -21,7 +21,7 @@ jobs:
       version_tag: ${{ steps.tag.outputs.version_tag }}
     steps:
       - name: 检出完整代码与历史标签
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
