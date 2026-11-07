@@ -2,6 +2,20 @@ import type { YonseiWord } from '@/types/korean';
 
 export const YONSEI_VOCAB_LIST: YonseiWord[] = [
   {
+    id: 'ys-100',
+    korean: '안녕하세요',
+    pronounced: '안녕하세요',
+    hanja: '安寧-',
+    isHanjaWord: true,
+    partOfSpeech: '常用寒暄',
+    chineseMeaning: '你好（日常尊敬阶寒暄）',
+    etymologyNote:
+      '안(安：平安/安全) + 녕(寧：安宁) + 하세요(请……/您……吗)。字面意思是“您安宁吗？”。',
+    bookLevel: 1,
+    exampleKo: '안녕하세요? 만나서 반갑습니다.',
+    exampleZh: '您好！很高兴认识您。',
+  },
+  {
     id: 'ys-101',
     korean: '한국어',
     pronounced: '한구거',
