@@ -1,0 +1,25 @@
+# Ignore dependencies & build outputs in Docker build context
+node_modules
+.pnpm-store
+.next
+out
+dist
+coverage
+
+# Ignore Git & CI files
+.git
+.github
+.husky
+
+# Ignore local environment & database files (mounted via volume at runtime)
+.env
+.env.*
+!.env.example
+data/*.db
+data/*.db-journal
+
+# Ignore docs & test files not needed for production build
+README.md
+CONTRIBUTING.md
+CHANGELOG.md
+*.log

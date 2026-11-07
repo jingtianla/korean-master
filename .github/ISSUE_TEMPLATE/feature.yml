@@ -1,0 +1,55 @@
+name: "✨ 功能需求 (Feature Request)"
+description: "创建一个新的韩语学习功能需求（开发分支、提交和 PR 均需关联此 Issue 编号）"
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        👋 感谢提出新功能需求！请填写以下信息，确保开发与测试验收标准清晰明确。
+
+  - type: input
+    id: summary
+    attributes:
+      label: "1. 需求简述 (Summary)"
+      description: "用一句话概括要做什么功能"
+      placeholder: "例如：在音变实验室中新增“连音化与紧音化”双规则高亮提示"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: "2. 所属业务模块 (Module)"
+      options:
+        - "四十音发音点读馆 (Hangul 40 Sounds)"
+        - "韩语音变规则实验室 (Pronunciation Helper)"
+        - "延世汉字词源单词本 (Yonsei Vocabulary)"
+        - "分级语法与互动题库 (Grammar & Quiz)"
+        - "工程基建与 CI/CD (DevOps & Infra)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "3. 详细功能说明 (Detailed Description)"
+      description: "详细说明背景、交互逻辑、中文解释展示方式或发音要求"
+      placeholder: |
+        - 用户在输入框输入韩文句子后...
+        - 点击发音按钮时调用韩语语音朗读...
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: "4. 验收标准 (Acceptance Criteria) 【必填，测试同学按条验收】"
+      description: "请列出可量化、可逐条打勾验证的验收条件，测试环境全部打勾后方可标记“验收通过”"
+      value: |
+        - [ ] 功能界面在桌面端与移动端正常渲染，无报错
+        - [ ] 中文释义与韩语发音功能响应正常
+        - [ ] 核心逻辑已补充对应的单元测试，且覆盖率达标 (>= 60%)
+        - [ ] `pnpm check` 本地全量自检与 GitHub CI 门禁全部通过
+    validations:
+      required: true

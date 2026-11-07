@@ -1,0 +1,55 @@
+{
+  "name": "korean-master",
+  "version": "0.1.0",
+  "private": true,
+  "description": "面向中文母语者的全栈交互式韩语学习平台（四十音点读、音变规则高亮、延世汉字词源词库、分级语法自测）",
+  "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "format": "prettier --write \"src/**/*.{ts,tsx,json,css}\" \"tests/**/*.{ts,tsx}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,json,css}\" \"tests/**/*.{ts,tsx}\"",
+    "lint": "eslint src tests",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm build",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "lucide-react": "0.468.0",
+    "next": "15.1.6",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "19.6.1",
+    "@commitlint/config-conventional": "19.6.0",
+    "@eslint/js": "9.18.0",
+    "@testing-library/jest-dom": "6.6.3",
+    "@testing-library/react": "16.2.0",
+    "@types/node": "22.10.7",
+    "@types/react": "19.0.7",
+    "@types/react-dom": "19.0.3",
+    "@vitejs/plugin-react": "4.3.4",
+    "@vitest/coverage-v8": "2.1.8",
+    "autoprefixer": "10.4.20",
+    "eslint": "9.18.0",
+    "globals": "15.14.0",
+    "husky": "9.1.7",
+    "jsdom": "25.0.1",
+    "lint-staged": "15.3.0",
+    "postcss": "8.4.49",
+    "prettier": "3.4.2",
+    "tailwindcss": "3.4.17",
+    "typescript": "5.7.3",
+    "typescript-eslint": "8.20.0",
+    "vitest": "2.1.8"
+  }
+}

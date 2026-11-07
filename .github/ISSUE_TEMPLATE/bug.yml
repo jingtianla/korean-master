@@ -1,0 +1,44 @@
+name: "🐛 缺陷报告 (Bug Report)"
+description: "反馈韩语学习平台中的功能异常、发音故障或解释错误"
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        🐞 发现 Bug 了？请提供复现步骤与修复后的验收标准，方便开发快速定位修复。
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: "1. 复现步骤 (Steps to Reproduce)"
+      description: "怎么操作会触发这个问题？"
+      placeholder: |
+        1. 打开「音变实验室」模块
+        2. 输入韩文句子「한국어」
+        3. 点击发音按钮，控制台报错...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: "2. 期望结果 vs 实际结果 (Expected vs Actual Behavior)"
+      placeholder: |
+        - 期望结果：正常朗读韩语并高亮显示连音化规则
+        - 实际结果：无声音输出
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: "3. 验收标准 (Acceptance Criteria) 【必填，测试同学按条验收】"
+      description: "修复后如何确认问题已彻底解决？"
+      value: |
+        - [ ] 按复现步骤操作，Bug 不再出现
+        - [ ] 已针对该 Bug 补充回归单元测试，防止后续再次引入
+        - [ ] 未影响其他原有模块的正常功能
+        - [ ] `pnpm check` 与 CI 流水线全部通过
+    validations:
+      required: true

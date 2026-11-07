@@ -1,0 +1,93 @@
+name: "Release & Deploy Prod - 发版构建与生产环境审批部署"
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-release:
+    name: "1. 构建版本镜像并生成 GitHub Release Notes"
+    runs-on: ubuntu-24.04
+    outputs:
+      version_tag: ${{ steps.tag.outputs.version_tag }}
+    steps:
+      - name: 检出完整代码与历史标签
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 提取语义化版本号 (vX.Y.Z)
+        id: tag
+        run: |
+          VERSION_TAG=${GITHUB_REF#refs/tags/}
+          echo "version_tag=${VERSION_TAG}" >> $GITHUB_OUTPUT
+          echo "当前发布版本: ${VERSION_TAG}"
+
+      - name: 设置 Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 登录 GitHub Container Registry (ghcr.io)
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 构建并推送固定版本镜像 (严禁使用 latest)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.version_tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: 自动生成 Release Notes 并发布 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+
+  deploy-production:
+    name: "2. 部署生产环境 (需负责人 @jingtianla 在 production 环境审批)"
+    needs: build-and-release
+    runs-on: ubuntu-24.04
+    environment:
+      name: production
+    steps:
+      - name: 检查是否配置远程生产服务器 SSH (兼容本机 Docker 演练)
+        id: check_prod_ssh
+        env:
+          PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+        run: |
+          if [ -z "${PROD_SSH_HOST}" ]; then
+            echo "has_ssh=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ 未配置远程 PROD_SSH_HOST，当前为【本机 Docker 生产演练模式】。"
+            echo "👉 审批已通过！可在本地执行：bash deploy/deploy.sh prod ${{ needs.build-and-release.outputs.version_tag }}"
+          else
+            echo "has_ssh=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: SSH 登录生产服务器发布新版本（自动备份上一版本标签供一键回滚）
+        if: steps.check_prod_ssh.outputs.has_ssh == 'true'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.PROD_SSH_HOST }}
+          username: ${{ secrets.PROD_SSH_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          port: ${{ secrets.PROD_SSH_PORT || 22 }}
+          script: |
+            set -e
+            cd /opt/korean-master/prod
+            ./deploy.sh prod "${{ needs.build-and-release.outputs.version_tag }}"

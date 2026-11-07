@@ -1,0 +1,8 @@
+# 默认代码审查负责人 (Code Owners)
+# 任何发起的 Pull Request 都会自动请求以下负责人进行 Review
+# 待另外两位队友 GitHub 用户名确定后，可追加在 @jingtianla 后面（如：* @jingtianla @teammate1）
+
+* @jingtianla
+/.github/ @jingtianla
+/deploy/ @jingtianla
+/AGENTS.md @jingtianla

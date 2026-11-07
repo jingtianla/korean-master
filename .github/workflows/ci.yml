@@ -1,0 +1,83 @@
+name: "CI - 代码质量门禁 (Lint / Test / Build)"
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+  push:
+    branches:
+      - feature/**
+      - fix/**
+      - hotfix/**
+      - chore/**
+      - docs/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  branch-naming-check:
+    name: "1. 分支命名规范校验"
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: 校验源分支名称是否符合规范
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          echo "当前 PR 源分支: ${HEAD_REF} -> 目标分支: ${BASE_REF}"
+          # 允许 release 分支或 develop 向 main 发起发版 PR
+          if [[ "${BASE_REF}" == "main" && "${HEAD_REF}" == "develop" ]]; then
+            echo "✅ 发版 PR (develop -> main) 校验通过"
+            exit 0
+          fi
+          if [[ ! "${HEAD_REF}" =~ ^(feature|fix|hotfix|chore|docs)/[0-9]+-[a-z0-9-]+$ ]]; then
+            echo "::error::分支名 '${HEAD_REF}' 不符合规范！必须为 <feature|fix|hotfix|chore|docs>/<issue号>-<英文短横线描述>，例如 feature/12-hangul-audio"
+            exit 1
+          fi
+          echo "✅ 分支命名符合规范！"
+
+  quality-and-test:
+    name: "2. 格式 / Lint / 类型 / 单测覆盖率(>=60%) / 构建"
+    runs-on: ubuntu-24.04
+    steps:
+      - name: 检出代码 (Checkout)
+        uses: actions/checkout@v4
+
+      - name: 安装 pnpm 包管理器
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.18.0
+
+      - name: 配置 Node.js 22 环境与依赖缓存
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: 安装项目依赖 (锁定 pnpm-lock.yaml)
+        run: pnpm install --frozen-lockfile
+
+      - name: 代码格式检查 (Prettier)
+        run: pnpm format:check
+
+      - name: 静态代码检查 (ESLint)
+        run: pnpm lint
+
+      - name: TypeScript 类型检查
+        run: pnpm typecheck
+
+      - name: 运行单元测试与 60% 覆盖率门禁 (Vitest)
+        run: pnpm test:coverage
+
+      - name: 生产环境构建验证 (Next.js Build)
+        run: pnpm build
+
+      - name: 依赖安全漏洞扫描 (Audit High/Critical)
+        run: pnpm audit --audit-level=high || echo "::warning::发现潜在依赖安全告警，请及时评估升级"
