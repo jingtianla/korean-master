@@ -1,8 +1,8 @@
 # ==============================================================================
-# 韩语学习平台 (Korean Master) - Windows PowerShell 本机 Docker 一键回滚脚本
-# 用法：
-#   回滚生产环境到上一版本：.\deploy\rollback.ps1 -Env prod
-#   回滚生产环境到指定版本：.\deploy\rollback.ps1 -Env prod -Tag v1.0.0
+# Korean Master - Windows PowerShell Local Docker Rollback Script
+# Usage:
+#   Rollback Prod to previous version: .\deploy\rollback.ps1 -Env prod
+#   Rollback Prod to specific version: .\deploy\rollback.ps1 -Env prod -Tag v0.1.0
 # ==============================================================================
 
 param(
@@ -13,6 +13,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-Location -Path $PSScriptRoot
+if ($env:Path -notlike "*DockerDesktop\resources\bin*") {
+    $env:Path += ";$env:LOCALAPPDATA\Programs\DockerDesktop\resources\bin"
+}
 
 if (-not $env:IMAGE_REPO) {
     $env:IMAGE_REPO = "ghcr.io/jingtianla/korean-master"
@@ -35,27 +38,27 @@ if (-not [string]::IsNullOrWhiteSpace($Tag)) {
 } elseif (Test-Path $StatePrev) {
     $RollbackTag = (Get-Content $StatePrev -Raw).Trim()
 } else {
-    Write-Error "❌ 未找到上一版本记录文件 ($StatePrev)，请使用 -Tag v1.0.0 手动指定回滚版本！"
+    Write-Error "[ERROR] No previous version record found ($StatePrev). Specify -Tag v0.1.0 manually."
     exit 1
 }
 
 if ($RollbackTag -eq "latest") {
-    Write-Error "❌ 严禁回滚到 latest 标签！请指定具体版本号。"
+    Write-Error "[ERROR] Rolling back to 'latest' is strictly forbidden! Specify an explicit version tag."
     exit 1
 }
 
 $env:IMAGE_TAG = $RollbackTag
-Write-Host "⏪ 正在将 [$Env] 环境回滚至版本: $($env:IMAGE_REPO):$($env:IMAGE_TAG) ..." -ForegroundColor Yellow
+Write-Host "[Rollback] Rolling back [$Env] environment to: $($env:IMAGE_REPO):$($env:IMAGE_TAG) ..." -ForegroundColor Yellow
 
 docker compose -f $ComposeFile up -d
 
-Write-Host "⏳ 正在检查回滚后的服务健康状态 ($HealthUrl)..." -ForegroundColor Cyan
-for ($i = 1; $i -le 15; $i++) {
+Write-Host "[HealthCheck] Verifying rolled-back service health ($HealthUrl)..." -ForegroundColor Cyan
+for ($i = 1; $i -le 20; $i++) {
     try {
         $resp = Invoke-RestMethod -Uri $HealthUrl -TimeoutSec 3
         if ($resp.status -eq "ok") {
             Set-Content -Path $StateCurrent -Value $RollbackTag -NoNewline
-            Write-Host "✅ 回滚成功！[$Env] 环境已恢复至版本: $RollbackTag" -ForegroundColor Green
+            Write-Host "[SUCCESS] Rollback complete! [$Env] environment restored to version: $RollbackTag" -ForegroundColor Green
             exit 0
         }
     } catch {
@@ -63,5 +66,5 @@ for ($i = 1; $i -le 15; $i++) {
     }
 }
 
-Write-Error "❌ 回滚后健康检查未通过，请检查容器日志！"
+Write-Error "[ERROR] Health check failed after rollback!"
 exit 1

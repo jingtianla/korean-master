@@ -25,6 +25,7 @@ prisma/*.db-journal
 deploy/data-test/
 deploy/data-prod/
 deploy/.*_tag
+一键安装Docker.bat
 
 # Testing & coverage
 coverage/

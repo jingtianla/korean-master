@@ -1,8 +1,8 @@
 # ==============================================================================
-# 韩语学习平台 (Korean Master) - Windows PowerShell 本机 Docker 部署脚本
-# 用法：
-#   部署测试环境：.\deploy\deploy.ps1 -Env test -Tag test
-#   部署生产环境：.\deploy\deploy.ps1 -Env prod -Tag v1.0.0
+# Korean Master - Windows PowerShell Local Docker Deploy Script
+# Usage:
+#   Test Env: .\deploy\deploy.ps1 -Env test -Tag test
+#   Prod Env: .\deploy\deploy.ps1 -Env prod -Tag v0.1.0
 # ==============================================================================
 
 param(
@@ -13,6 +13,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-Location -Path $PSScriptRoot
+if ($env:Path -notlike "*DockerDesktop\resources\bin*") {
+    $env:Path += ";$env:LOCALAPPDATA\Programs\DockerDesktop\resources\bin"
+}
 
 if (-not $env:IMAGE_REPO) {
     $env:IMAGE_REPO = "ghcr.io/jingtianla/korean-master"
@@ -20,7 +23,7 @@ if (-not $env:IMAGE_REPO) {
 
 if ($Env -eq "prod") {
     if ([string]::IsNullOrWhiteSpace($Tag) -or $Tag -eq "latest") {
-        Write-Error "❌ [错误] 生产环境部署必须指定具体的版本号（例如 -Tag v1.0.0），严禁使用 latest！"
+        Write-Error "[ERROR] Production deployment requires a specific version tag (e.g. -Tag v0.1.0). 'latest' is strictly forbidden!"
         exit 1
     }
     $ComposeFile = "docker-compose.prod.yml"
@@ -39,23 +42,33 @@ if (Test-Path $StateCurrent) {
     $PrevTag = (Get-Content $StateCurrent -Raw).Trim()
     if ($PrevTag -and ($PrevTag -ne $Tag)) {
         Set-Content -Path $StatePrev -Value $PrevTag -NoNewline
-        Write-Host "📦 已自动备份上一版本标签: $PrevTag" -ForegroundColor Cyan
+        Write-Host "[Backup] Saved previous version tag: $PrevTag" -ForegroundColor Cyan
     }
 }
 
 $env:IMAGE_TAG = $Tag
-Write-Host "🚀 正在本机部署 [$Env] 环境，镜像版本: $($env:IMAGE_REPO):$($env:IMAGE_TAG) ..." -ForegroundColor Yellow
+$FullImage = "$($env:IMAGE_REPO):$($env:IMAGE_TAG)"
+Write-Host "[Deploy] Starting [$Env] environment with image: $FullImage ..." -ForegroundColor Yellow
 
-docker compose -f $ComposeFile pull
+$localExists = docker images -q $FullImage
+if (-not $localExists) {
+    Write-Host "[Deploy] Image not found locally, pulling or building $FullImage ..." -ForegroundColor Cyan
+    docker compose -f $ComposeFile pull 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[Deploy] Building local image $FullImage from Dockerfile..." -ForegroundColor Cyan
+        docker build -t $FullImage ..
+    }
+}
+
 docker compose -f $ComposeFile up -d
 
-Write-Host "⏳ 正在执行健康检查 ($HealthUrl)..." -ForegroundColor Cyan
-for ($i = 1; $i -le 15; $i++) {
+Write-Host "[HealthCheck] Verifying service health ($HealthUrl)..." -ForegroundColor Cyan
+for ($i = 1; $i -le 20; $i++) {
     try {
         $resp = Invoke-RestMethod -Uri $HealthUrl -TimeoutSec 3
         if ($resp.status -eq "ok") {
             Set-Content -Path $StateCurrent -Value $Tag -NoNewline
-            Write-Host "✅ [$Env] 环境部署成功并通过健康检查！当前版本: $Tag" -ForegroundColor Green
+            Write-Host "[SUCCESS] [$Env] environment is UP and HEALTHY! Running version: $Tag ($HealthUrl)" -ForegroundColor Green
             exit 0
         }
     } catch {
@@ -63,5 +76,5 @@ for ($i = 1; $i -le 15; $i++) {
     }
 }
 
-Write-Error "❌ 健康检查超时失败！请运行 .\deploy\rollback.ps1 -Env $Env 回滚。"
+Write-Error "[ERROR] Health check timed out! Run .\deploy\rollback.ps1 -Env $Env to rollback."
 exit 1

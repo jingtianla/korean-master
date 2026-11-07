@@ -46,16 +46,24 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
+          load: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.version_tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: 自动生成 Release Notes 并发布 GitHub Release
+      - name: 推送镜像至 GHCR 并导出离线镜像包供本机高速加载
+        run: |
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.version_tag }}
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:test
+          docker save ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.version_tag }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:test | gzip > korean-master-image.tar.gz
+
+      - name: 自动生成 Release Notes 并发布 GitHub Release (附带离线 Docker 镜像包)
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+          files: korean-master-image.tar.gz
           draft: false
           prerelease: false
 
