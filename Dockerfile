@@ -14,7 +14,7 @@ FROM node:22.13.1-alpine3.21 AS deps
 WORKDIR /app
 
 # 启用固定版本 pnpm
-RUN corepack enable && corepack prepare pnpm@12.18.0 --activate
+RUN npm install -g pnpm@12.18.0
 
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --ignore-scripts
@@ -25,7 +25,7 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 FROM node:22.13.1-alpine3.21 AS builder
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@12.18.0 --activate
+RUN npm install -g pnpm@12.18.0
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

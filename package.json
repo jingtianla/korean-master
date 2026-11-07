@@ -7,6 +7,12 @@
   "engines": {
     "node": ">=20.0.0"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp"
+    ]
+  },
   "scripts": {
     "setup": "node scripts/setup.mjs",
     "dev": "next dev",
