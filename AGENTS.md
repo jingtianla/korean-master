@@ -50,6 +50,11 @@ korean-master/
    - 允许的前缀：`feature/`、`fix/`、`hotfix/`、`chore/`、`docs/`
    - 正确示例：`feature/12-hangul-pronunciation-helper`、`fix/15-audio-playback-bug`
    - 错误示例：`dev-login`、`feature/add_word`（缺少 Issue 编号或使用了下划线）
+   - **Issue 编号必须是 GitHub 真实分配的编号（硬性前置条件）**：
+     - **先建单、再切分支、最后才写代码**。开工第一步必须在 GitHub 创建 Issue（或确认已有 Issue），用返回的**真实编号**命名分支；严禁按「当前最大编号 +1」预判、抢号或凭空编号。
+     - 真实编号只能以 GitHub API `GET /repos/<owner>/<repo>/issues?state=all` 的返回为准，**不得从本地 commit message 中的 `(#N)` 标注推断**（那可能只是手写标注，不代表 GitHub 已分配的编号）。
+     - 若当前环境没有 GitHub 写权限，必须请开发者本人创建 Issue 并提供编号，AI 不得自行推测。
+     - 已创建但尚未 push 的分支若编号有误，用 `git branch -m <新名>` 修正即可，不影响代码改动。
 2. **文件与符号命名**：
    - React 组件文件：大驼峰（`PascalCase.tsx`），如 `PronunciationHelper.tsx`
    - 工具函数与 Hook：小驼峰（`camelCase.ts`），如 `koreanPhonetics.ts`、`useSpeech.ts`
@@ -84,6 +89,7 @@ korean-master/
 3. **禁止跳过 Git Hooks**：严禁使用 `git commit --no-verify` 或 `git push --no-verify` 绕过本地自检。
 4. **禁止在生产配置中使用 `latest` 镜像标签**：Docker 生产部署必须使用具体的语义化版本号（如 `v1.0.0`）或 Git 短 SHA。
 5. **禁止大爆炸式 PR**：一个 PR 只做一件事，改动尽量控制在 **400 行以内**。
+6. **禁止凭空编造 Issue 编号**：分支名与 commit message 中引用的 `#N` 必须对应 GitHub 上真实存在的 Issue / PR；严禁按最大编号推测、抢号，或从本地 commit message 推断编号。
 
 ---
 
@@ -109,18 +115,27 @@ make check
 
 ```mermaid
 flowchart LR
-    A["Step 1: 建单切分支\nGitHub Issue #N\nfeature/N-slug"] --> B["Step 2: 编码与单测\n修改 src/ 与 tests/\n运行 pnpm check"]
+    A["Step 1: 先建单再切分支\nGitHub 真实 Issue #N\nfeature/N-slug"] --> B["Step 2: 编码与单测\n修改 src/ 与 tests/\n运行 pnpm check"]
     B --> C["Step 3: 推送与提 PR\ngit push 推分支\n向 develop 提 PR"]
     C --> D["Step 4: CI 门禁与合并\nci.yml 自动校验\nSquash Merge 入 develop"]
     D --> E["Step 5: 自动部署测试服\ncd-test.yml 自动打包\n直推阿里云 ECS :3001"]
     E --> F["Step 6: 正式发版上线\n合入 main 并打 Tag vX.Y.Z\nrelease.yml 直推阿里云 :3000"]
 ```
 
-### Step 1：确认 Issue 编号并从 `develop` 切出合规分支
+### Step 1：先建 Issue 拿到真实编号，再从 `develop` 切出合规分支
+
+> **顺序不可颠倒**：先在 GitHub 创建 Issue（或确认已有），拿到返回的真实编号 `N`，再用 `N` 命名分支，最后才开始编码。严禁先切分支再补单、按最大编号推测 `N`，或从本地 commit message 的 `(#N)` 标注推断编号。
+
 ```bash
+# ① 建单：创建 Issue，取响应中的 number 作为真实编号
+#    可用 gh issue create、已授权的 GitHub 连接器或 GitHub API；凭据一律由本机凭据助手提供，禁止写入仓库
+gh issue create --title "<需求标题>" --body "<需求描述与验收标准>"
+
+# ② 同步基线并从 develop 切分支（编号必须用上一步拿到的真实值）
+git fetch origin --prune
 git checkout develop
 git pull origin develop
-git checkout -b feature/<issue编号>-<英文短横线简述>
+git checkout -b feature/<真实issue编号>-<英文短横线简述>
 ```
 
 ### Step 2：编写代码、补充单元测试并跑通本地门禁
