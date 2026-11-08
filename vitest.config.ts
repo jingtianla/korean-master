@@ -8,6 +8,8 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     include: ['tests/**/*.test.{ts,tsx}'],
+    // 禁用文件级并行：Windows / 受限环境下多 worker 并发写 Vite 临时模块缓存会触发 EPERM
+    fileParallelism: false,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary', 'html'],
