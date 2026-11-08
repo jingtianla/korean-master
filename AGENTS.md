@@ -100,3 +100,107 @@ make check
 ```
 
 > `pnpm check` 会依次执行：**代码格式检查 (Prettier) → 静态代码检查 (ESLint) → TypeScript 类型检查 (`tsc --noEmit`) → 单元测试与 60% 覆盖率门禁 (Vitest) → 生产构建验证 (`next build`)**。只要其中任何一步报错，AI 必须自行修复直至全部绿灯通过！
+
+---
+
+## 7. 从拉分支到阿里云自动部署的全流程 SOP（任何 AI 接手必读）
+
+本仓库已打通 **“本地开发自检 ➔ GitHub Actions 云端门禁与镜像打包 ➔ 自动加密同步并部署至阿里云 ECS（测试服 `:3001` / 生产服 `:3000`）”** 的全自动闭环。后续任何 AI 编码助手接手新需求或修复缺陷时，请严格按以下 **6 步标准流程** 执行（全程无需依赖开发者本机开启 Docker）：
+
+```mermaid
+flowchart LR
+    A["Step 1: 建单切分支\nGitHub Issue #N\nfeature/N-slug"] --> B["Step 2: 编码与单测\n修改 src/ 与 tests/\n运行 pnpm check"]
+    B --> C["Step 3: 推送与提 PR\ngit push 推分支\n向 develop 提 PR"]
+    C --> D["Step 4: CI 门禁与合并\nci.yml 自动校验\nSquash Merge 入 develop"]
+    D --> E["Step 5: 自动部署测试服\ncd-test.yml 自动打包\n直推阿里云 ECS :3001"]
+    E --> F["Step 6: 正式发版上线\n合入 main 并打 Tag vX.Y.Z\nrelease.yml 直推阿里云 :3000"]
+```
+
+### Step 1：确认 Issue 编号并从 `develop` 切出合规分支
+```bash
+git checkout develop
+git pull origin develop
+git checkout -b feature/<issue编号>-<英文短横线简述>
+```
+
+### Step 2：编写代码、补充单元测试并跑通本地门禁
+- 修改业务代码后，若涉及 `src/lib/` 核心纯函数，必须在 `tests/` 下补充单元测试，确保覆盖率 `>= 60%`。
+- 执行 `pnpm check`，确保 Prettier、ESLint、`tsc --noEmit`、Vitest 覆盖率、`next build` 全部通过。
+
+### Step 3：提交代码并推送到 GitHub 远端
+```bash
+git add <修改的文件>
+git commit -m "feat(scope): short description (#<issue编号>)"
+git push -u origin feature/<issue编号>-<英文短横线简述>
+```
+> **网络环境提示（Windows 开发机）**：若在开发者 Windows 本机执行 `git push` 或调用 GitHub API 遇到网络超时，可附带本地代理参数：`git -c http.proxy=http://127.0.0.1:7897 push ...` 或 `curl.exe -x http://127.0.0.1:7897 ...`。
+
+### Step 4：创建 Pull Request 至 `develop` 并通过云端 CI 门禁
+- 向 `develop` 分支发起 Pull Request（遵循 `.github/pull_request_template.md` 并在正文中写明 `Closes #<issue编号>`）。
+- `.github/workflows/ci.yml` 会自动执行云端门禁校验；全绿通过后使用 **Squash and merge** 合并入 `develop`（仓库已配置自动删除已合并的功能分支）。
+
+### Step 5：GitHub 云端自动部署至阿里云测试环境（`:3001`）
+- 代码合入 `develop` 后，自动触发 `.github/workflows/cd-test.yml`：
+  1. 在 GitHub 云端构建 Docker 镜像并推送至 `ghcr.io/jingtianla/korean-master:develop-<shortSHA>` 及 `:test`；
+  2. 提取编译产物包（`.next`）并通过 GitHub Actions Secrets 中加密存储的 SSH 密钥，直接推送至阿里云 ECS 服务器；
+  3. 阿里云 ECS 利用本地预缓存的基础层（`node:22.14.0-alpine3.21` 与 `/tmp/korean-stage`）秒级合成新镜像，并执行 `/opt/korean-master/deploy/deploy.sh test <image_tag>` 更新测试环境容器 `korean-master-test`（映射端口 `3001`）及完成 `/api/health` 健康检查。
+- 验收通过后，在对应 Issue 上打上 `验收通过` 标签。
+
+### Step 6：正式发版上线 `main` 并自动部署阿里云生产环境（`:3000`）
+- 从 `develop` 向 `main` 发起发版 PR，合并后在 `main` 上创建语义化版本标签并推送：
+  ```bash
+  git checkout main && git pull origin main
+  git tag -a v0.2.0 -m "Release v0.2.0"
+  git push origin v0.2.0
+  ```
+- 推送 `v*.*.*` 标签后，自动触发 `.github/workflows/release.yml`：
+  1. 自动生成 GitHub Release Notes 并推送固定版本镜像 `ghcr.io/jingtianla/korean-master:vX.Y.Z`（严禁使用 `latest`）；
+  2. 通过 SSH 自动同步至阿里云 ECS 并执行 `/opt/korean-master/deploy/deploy.sh prod vX.Y.Z`；
+  3. 自动将上一生产版本号备份至 `/opt/korean-master/deploy/.prod_previous_tag`，更新生产容器 `korean-master-prod`（映射端口 `3000`）并验证 `/api/health` 健康状态。
+
+---
+
+## 8. 开源公开仓库权限与机密安全规范（严防泄密）
+
+本仓库为 **Public（开源公开）** 仓库，任何 AI 助手在操作本仓库时必须遵守以下安全铁律：
+
+1. **推送与合并权限控制**：
+   - 仓库代码对外公开可读，但**仅有仓库所有者（`@jingtianla`）拥有 Write/Admin 推送与合并权限**。
+   - `main` 与 `develop` 分支均受 GitHub 服务端 Branch Protection Rules 及本地 `.husky/pre-push` 双重保护，禁止直接 push、禁止 force push、禁止删除保护分支。
+2. **云端机密与服务器信息零暴露**：
+   - **严禁在任何代码、脚本、工作流 YAML、文档或 Commit 信息中出现真实的云服务器公网 IP、SSH 密码、私钥或 Personal Access Token**。
+   - 阿里云 ECS 的连接信息已全部加密保存在 GitHub 仓库的 **Settings → Secrets and variables → Actions** 中，工作流仅通过变量名引用：
+     - `TEST_SSH_HOST` / `PROD_SSH_HOST`：云服务器地址
+     - `TEST_SSH_USER` / `PROD_SSH_USER`：云服务器登录用户
+     - `TEST_SSH_KEY` / `PROD_SSH_KEY`：云服务器 Ed25519 专用私钥
+   - 开发者本机的免密私钥存放于系统用户目录 `~/.ssh/id_ed25519_aliyun`（不在仓库目录内，绝不可复制到仓库中）。
+
+---
+
+## 9. 阿里云 ECS 与本机 Docker 运维及一键回滚指南
+
+### 9.1 阿里云 ECS 服务器端目录结构与一键回滚
+阿里云 ECS 上的部署编排文件位于 `/opt/korean-master/deploy/`，镜像快速合成缓存目录位于 `/tmp/korean-stage/`：
+```bash
+# 在阿里云 ECS 上手动部署指定生产版本
+bash /opt/korean-master/deploy/deploy.sh prod v0.1.0
+
+# 生产环境出现异常时，30 秒内一键回滚至上一稳定版本（默认读取 .prod_previous_tag）
+bash /opt/korean-master/deploy/rollback.sh prod
+
+# 或回滚至任意指定历史版本
+bash /opt/korean-master/deploy/rollback.sh prod v0.1.0
+```
+
+### 9.2 开发者 Windows 本机 Docker Desktop 演练与回滚
+若需在开发者本机 Windows Docker Desktop 上演练容器部署或回滚（脚本已内置 `Ensure-DockerEngine` 自动唤醒机制，且不会改变当前工作目录）：
+```powershell
+# 本机启动测试环境容器 (http://localhost:3001)
+.\deploy\deploy.ps1 -Env test -Tag test
+
+# 本机启动生产环境容器 (http://localhost:3000)
+.\deploy\deploy.ps1 -Env prod -Tag v0.1.0
+
+# 本机生产环境一键回滚至上一版本
+.\deploy\rollback.ps1 -Env prod
+```
