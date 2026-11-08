@@ -44,7 +44,9 @@ fi
 export IMAGE_TAG="${TARGET_TAG}"
 echo "🚀 正在部署 [${ENV_TYPE}] 环境，目标镜像: ${IMAGE_REPO}:${IMAGE_TAG} ..."
 
-docker compose -f "${COMPOSE_FILE}" pull
+if [[ -z "$(docker images -q "${IMAGE_REPO}:${IMAGE_TAG}")" ]]; then
+  docker compose -f "${COMPOSE_FILE}" pull
+fi
 docker compose -f "${COMPOSE_FILE}" up -d
 
 echo "⏳ 正在执行健康检查 (${HEALTH_URL})..."

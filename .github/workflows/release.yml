@@ -53,28 +53,42 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: 推送镜像至 GHCR 并导出离线镜像包供本机高速加载
+      - name: 推送镜像至 GHCR 并提取构建产物包供阿里云服务器极速同步
         run: |
           docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.version_tag }}
           docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:test
-          docker save ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.version_tag }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:test | gzip > korean-master-image.tar.gz
+          CID=$(docker create ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.version_tag }})
+          mkdir -p /tmp/dist-sync
+          docker cp "${CID}:/app/.next" /tmp/dist-sync/.next
+          docker rm "${CID}"
+          tar -czf app-next.tar.gz -C /tmp/dist-sync .next
 
-      - name: 自动生成 Release Notes 并发布 GitHub Release (附带离线 Docker 镜像包)
+      - name: 上传生产构建产物 Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: prod-app-next
+          path: app-next.tar.gz
+
+      - name: 自动生成 Release Notes 并发布 GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          files: korean-master-image.tar.gz
           draft: false
           prerelease: false
 
   deploy-production:
-    name: "2. 部署生产环境 (需负责人 @jingtianla 在 production 环境审批)"
+    name: "2. 自动部署到阿里云生产环境 (:3000) 并执行健康检查"
     needs: build-and-release
     runs-on: ubuntu-24.04
     environment:
       name: production
     steps:
-      - name: 检查是否配置远程生产服务器 SSH (兼容本机 Docker 演练)
+      - name: 下载生产构建产物 Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: prod-app-next
+
+      - name: 检查是否配置远程生产服务器 SSH
         id: check_prod_ssh
         env:
           PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
@@ -82,20 +96,28 @@ jobs:
           if [ -z "${PROD_SSH_HOST}" ]; then
             echo "has_ssh=false" >> $GITHUB_OUTPUT
             echo "ℹ️ 未配置远程 PROD_SSH_HOST，当前为【本机 Docker 生产演练模式】。"
-            echo "👉 审批已通过！可在本地执行：bash deploy/deploy.sh prod ${{ needs.build-and-release.outputs.version_tag }}"
           else
             echo "has_ssh=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: SSH 登录生产服务器发布新版本（自动备份上一版本标签供一键回滚）
+      - name: GitHub 云端直接推送并部署到阿里云 ECS 生产环境 (:3000)
         if: steps.check_prod_ssh.outputs.has_ssh == 'true'
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.PROD_SSH_HOST }}
-          username: ${{ secrets.PROD_SSH_USER }}
-          key: ${{ secrets.PROD_SSH_KEY }}
-          port: ${{ secrets.PROD_SSH_PORT || 22 }}
-          script: |
+        env:
+          PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          PROD_SSH_USER: ${{ secrets.PROD_SSH_USER }}
+          PROD_SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+          VERSION_TAG: ${{ needs.build-and-release.outputs.version_tag }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "${PROD_SSH_KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          SSH_OPTS="-i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+          scp ${SSH_OPTS} app-next.tar.gz "${PROD_SSH_USER}@${PROD_SSH_HOST}:/tmp/app-next.tar.gz"
+          ssh ${SSH_OPTS} "${PROD_SSH_USER}@${PROD_SSH_HOST}" "
             set -e
-            cd /opt/korean-master/prod
-            ./deploy.sh prod "${{ needs.build-and-release.outputs.version_tag }}"
+            rm -rf /tmp/korean-stage/.next
+            tar -xzf /tmp/app-next.tar.gz -C /tmp/korean-stage
+            docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION_TAG} -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:test /tmp/korean-stage
+            cd /opt/korean-master/deploy
+            bash deploy.sh prod ${VERSION_TAG}
+          "
