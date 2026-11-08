@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BookOpen,
   CheckCircle2,
@@ -20,6 +20,7 @@ import {
   filterVocabulary,
 } from '@/lib/koreanPhonetics';
 import { speakKorean } from '@/lib/speech';
+import { needsTranslation } from '@/lib/translation';
 import type { GrammarLevel, HangulCategory } from '@/types/korean';
 
 type ActiveTab = 'hangul' | 'phonetics' | 'vocab' | 'grammar';
@@ -30,12 +31,17 @@ const SAMPLE_SENTENCES = [
   { label: '在学校食堂吃汤饭（紧音化+连音化）', text: '학교 식당에서 국밥을 먹어요' },
   { label: '今年考入大学（送气化）', text: '대학교에 입학했어요' },
   { label: '一起去看电影（颚音化）', text: '우리 같이 영화 봐요' },
+  { label: '输入中文试译（你好）', text: '你好' },
 ];
 
 export function KoreanPlatform() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('phonetics');
   const [hangulCat, setHangulCat] = useState<HangulCategory | 'all'>('all');
   const [inputText, setInputText] = useState<string>('한국어를 같이 공부합니다');
+  const [translatedText, setTranslatedText] = useState<string>('');
+  const [translateStatus, setTranslateStatus] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [retryCount, setRetryCount] = useState<number>(0);
+  const [speechRate, setSpeechRate] = useState<number>(0.9);
   const [vocabQuery, setVocabQuery] = useState<string>('');
   const [onlyHanja, setOnlyHanja] = useState<boolean>(false);
   const [savedWordIds, setSavedWordIds] = useState<string[]>([]);
@@ -51,7 +57,59 @@ export function KoreanPlatform() {
     [hangulCat],
   );
 
-  const phoneticResult = useMemo(() => analyzePronunciation(inputText), [inputText]);
+  const shouldTranslate = needsTranslation(inputText);
+  const resolvedKorean = shouldTranslate ? translatedText : inputText;
+  const phoneticResult = useMemo(() => analyzePronunciation(resolvedKorean), [resolvedKorean]);
+  const translationCache = useRef<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    if (!shouldTranslate) {
+      setTranslatedText('');
+      setTranslateStatus('idle');
+      return;
+    }
+
+    const text = inputText.trim();
+    const cached = translationCache.current.get(text);
+    if (cached) {
+      setTranslatedText(cached);
+      setTranslateStatus('idle');
+      return;
+    }
+
+    setTranslatedText('');
+    setTranslateStatus('loading');
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch('/api/translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error('translation request failed');
+        const payload: unknown = await response.json();
+        if (typeof payload !== 'object' || payload === null) throw new Error('invalid payload');
+        const translated = (payload as { translatedText?: unknown }).translatedText;
+        if (typeof translated !== 'string' || translated.trim().length === 0) {
+          throw new Error('empty translation');
+        }
+        translationCache.current.set(text, translated);
+        setTranslatedText(translated);
+        setTranslateStatus('idle');
+      } catch {
+        if (controller.signal.aborted) return;
+        setTranslatedText('');
+        setTranslateStatus('error');
+      }
+    }, 500);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [inputText, shouldTranslate, retryCount]);
 
   const filteredVocab = useMemo(
     () => filterVocabulary(YONSEI_VOCAB_LIST, { query: vocabQuery, onlyHanja }),
@@ -172,7 +230,7 @@ export function KoreanPlatform() {
                 🔬 韩语音变规则实时转写器（连音 / 鼻音 / 紧音 / 送气 / 颚音化）
               </h2>
               <p className="text-sm text-slate-500">
-                输入任意韩语句子，自动推演韩国人真实口语读音，并用中文拆解背后的音变原理。
+                输入中文或韩文，中文会自动翻译成韩语，再推演真实口语读音并用中文拆解音变原理。
               </p>
             </div>
           </div>
@@ -193,27 +251,23 @@ export function KoreanPlatform() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-xl border border-slate-200 p-4">
-              <div className="mb-2 flex items-center justify-between">
-                <label htmlFor="korean-input" className="text-xs font-semibold text-slate-500">
-                  输入韩文原文 (Original Hangul)
-                </label>
-                <button
-                  type="button"
-                  onClick={() => speakKorean(inputText, 0.9)}
-                  className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-100"
-                >
-                  <Volume2 className="h-3.5 w-3.5" />
-                  <span>常速朗读</span>
-                </button>
-              </div>
+              <label
+                htmlFor="korean-input"
+                className="mb-2 block text-xs font-semibold text-slate-500"
+              >
+                输入中文或韩文
+              </label>
               <textarea
                 id="korean-input"
                 rows={3}
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 className="w-full rounded-lg border border-slate-200 p-3 text-xl font-bold text-slate-900 focus:border-indigo-500 focus:outline-none"
-                placeholder="请输入韩文句子，如：한국어를 공부합니다"
+                placeholder="可输入中文自动译成韩语，或直接输入韩文，如：한국어를 공부합니다"
               />
+              <p className="mt-2 text-xs text-slate-400">
+                含中文时自动翻译成韩语再做音变推演；纯韩文则直接分析。
+              </p>
             </div>
 
             <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
@@ -223,18 +277,64 @@ export function KoreanPlatform() {
                 </span>
                 <button
                   type="button"
-                  onClick={() => speakKorean(inputText, 0.65)}
-                  className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1 text-xs font-semibold text-white hover:bg-indigo-700"
+                  onClick={() => speakKorean(phoneticResult.pronouncedText, speechRate)}
+                  disabled={resolvedKorean.trim().length === 0}
+                  className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1 text-xs font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Volume2 className="h-3.5 w-3.5" />
-                  <span>0.65x 慢速跟读</span>
+                  <span>朗读发音</span>
                 </button>
               </div>
+
+              {shouldTranslate && (
+                <div className="mb-2 rounded-lg bg-white/70 px-3 py-2 text-xs text-indigo-700">
+                  {translateStatus === 'loading' && '正在把中文翻译成韩语…'}
+                  {translateStatus === 'error' && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span>翻译暂时没连上，可直接输入韩文继续使用。</span>
+                      <button
+                        type="button"
+                        onClick={() => setRetryCount((count) => count + 1)}
+                        className="shrink-0 rounded-md bg-indigo-100 px-2 py-1 font-semibold text-indigo-700 hover:bg-indigo-200"
+                      >
+                        重试翻译
+                      </button>
+                    </div>
+                  )}
+                  {translateStatus === 'idle' && translatedText && (
+                    <>
+                      中文译文：<span className="font-bold">{translatedText}</span>
+                    </>
+                  )}
+                </div>
+              )}
+
               <div className="text-2xl font-extrabold tracking-wide text-indigo-900">
-                [{phoneticResult.pronouncedText}]
+                [{resolvedKorean ? phoneticResult.pronouncedText : '—'}]
               </div>
               <div className="mt-2 font-mono text-sm text-indigo-600">
-                罗马音参考：{phoneticResult.romanization}
+                罗马音参考：{resolvedKorean ? phoneticResult.romanization : '—'}
+              </div>
+
+              <div className="mt-4 border-t border-indigo-100 pt-3">
+                <div className="mb-1 flex items-center justify-between text-xs font-semibold text-indigo-700">
+                  <span>朗读语速</span>
+                  <span className="font-mono">{speechRate.toFixed(2)}x</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="1.5"
+                  step="0.05"
+                  value={speechRate}
+                  onChange={(e) => setSpeechRate(Number(e.target.value))}
+                  className="w-full accent-indigo-600"
+                  aria-label="朗读语速"
+                />
+                <div className="mt-1 flex justify-between text-xs text-indigo-400">
+                  <span>0.50x 慢速</span>
+                  <span>1.50x 快速</span>
+                </div>
               </div>
             </div>
           </div>
