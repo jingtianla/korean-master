@@ -173,23 +173,26 @@ git push -u origin feature/<issue编号>-<英文短横线简述>
      - `TEST_SSH_HOST` / `PROD_SSH_HOST`：云服务器地址
      - `TEST_SSH_USER` / `PROD_SSH_USER`：云服务器登录用户
      - `TEST_SSH_KEY` / `PROD_SSH_KEY`：云服务器 Ed25519 专用私钥
-   - 开发者本机的免密私钥存放于系统用户目录 `~/.ssh/id_ed25519_aliyun`（不在仓库目录内，绝不可复制到仓库中）。
+   - 开发者本机的免密私钥与服务器地址映射存放于系统用户目录 `~/.ssh/config`（主机别名：`aliyun-korean`，绑定私钥 `~/.ssh/id_ed25519_aliyun`，均不在仓库目录内，绝不可复制到仓库中）。在本机运行的任何 AI 编码助手均可直接通过 `ssh aliyun-korean "<命令>"` 免密连接阿里云服务器，无需知道或暴露真实 IP。
 
 ---
 
 ## 9. 阿里云 ECS 与本机 Docker 运维及一键回滚指南
 
-### 9.1 阿里云 ECS 服务器端目录结构与一键回滚
-阿里云 ECS 上的部署编排文件位于 `/opt/korean-master/deploy/`，镜像快速合成缓存目录位于 `/tmp/korean-stage/`：
+### 9.1 阿里云 ECS 远程运维与一键回滚（通过本机 SSH 别名 `aliyun-korean`）
+阿里云 ECS 上的部署编排文件位于 `/opt/korean-master/deploy/`，镜像快速合成缓存目录位于 `/tmp/korean-stage/`。任何在开发者本机工作的 AI 助手或开发者本人，可直接执行以下命令（由 `~/.ssh/config` 自动解析目标服务器并免密登录）：
 ```bash
+# 查看阿里云 ECS 上正在运行的容器状态
+ssh aliyun-korean "docker ps"
+
 # 在阿里云 ECS 上手动部署指定生产版本
-bash /opt/korean-master/deploy/deploy.sh prod v0.1.0
+ssh aliyun-korean "bash /opt/korean-master/deploy/deploy.sh prod v0.1.0"
 
 # 生产环境出现异常时，30 秒内一键回滚至上一稳定版本（默认读取 .prod_previous_tag）
-bash /opt/korean-master/deploy/rollback.sh prod
+ssh aliyun-korean "bash /opt/korean-master/deploy/rollback.sh prod"
 
 # 或回滚至任意指定历史版本
-bash /opt/korean-master/deploy/rollback.sh prod v0.1.0
+ssh aliyun-korean "bash /opt/korean-master/deploy/rollback.sh prod v0.1.0"
 ```
 
 ### 9.2 开发者 Windows 本机 Docker Desktop 演练与回滚
