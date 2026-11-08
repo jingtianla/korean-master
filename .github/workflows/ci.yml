@@ -56,7 +56,7 @@ jobs:
           version: 12.18.0
 
       - name: 配置 Node.js 22 环境与依赖缓存
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: "pnpm"
