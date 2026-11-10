@@ -137,29 +137,29 @@ export function KoreanPlatform() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
       {/* 顶部品牌栏 */}
-      <header className="mb-8 rounded-2xl bg-gradient-to-r from-indigo-600 via-blue-600 to-cyan-600 p-6 text-white shadow-lg">
+      <header className="mb-8 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
         <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
           <div>
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-indigo-100">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-indigo-600">
               <Sparkles className="h-4 w-4" />
               <span>中文母语者专属 · 开源精华融合版</span>
             </div>
-            <h1 className="mt-1 text-2xl font-bold md:text-3xl">
+            <h1 className="mt-1 text-2xl font-bold text-slate-900 md:text-3xl">
               韩语学习全能工作台 (Korean Master)
             </h1>
-            <p className="mt-1 text-sm text-indigo-100">
+            <p className="mt-1 text-sm text-slate-500">
               集四十音真人点读 · 音变规则高亮转写 · 《延世韩国语》汉字词源记忆 ·
               分级语法与错题本于一体
             </p>
           </div>
           <div className="flex flex-wrap gap-2 text-xs">
-            <span className="rounded-full bg-white/20 px-3 py-1.5 backdrop-blur-sm">
+            <span className="rounded-full bg-indigo-50 px-3 py-1.5 text-indigo-700">
               🔊 点击任意韩文即时发音
             </span>
-            <span className="rounded-full bg-white/20 px-3 py-1.5 backdrop-blur-sm">
+            <span className="rounded-full bg-indigo-50 px-3 py-1.5 text-indigo-700">
               📒 生词收藏：{savedWordIds.length} 词
             </span>
-            <span className="rounded-full bg-white/20 px-3 py-1.5 backdrop-blur-sm">
+            <span className="rounded-full bg-indigo-50 px-3 py-1.5 text-indigo-700">
               🎯 语法错题本：{mistakeIds.length} 题
             </span>
           </div>
