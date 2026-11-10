@@ -90,6 +90,7 @@ korean-master/
 4. **禁止在生产配置中使用 `latest` 镜像标签**：Docker 生产部署必须使用具体的语义化版本号（如 `v1.0.0`）或 Git 短 SHA。
 5. **禁止大爆炸式 PR**：一个 PR 只做一件事，改动尽量控制在 **400 行以内**。
 6. **禁止凭空编造 Issue 编号**：分支名与 commit message 中引用的 `#N` 必须对应 GitHub 上真实存在的 Issue / PR；严禁按最大编号推测、抢号，或从本地 commit message 推断编号。
+7. **禁止未经确认自行推送**：AI 完成编码与 `pnpm check` 后，必须先向开发者汇报改动（分支名、Issue 编号、改动文件、自检结果）并**等待开发者明确确认**，才能执行 `git commit`、`git push` 或创建 PR。严禁以「自检已全绿」「SOP 里写了提交推送」「顺手做完」为由自行提交推送。PR 合并、测试环境验收、打 Tag 与发版一律由开发者本人操作。
 
 ---
 
@@ -107,6 +108,8 @@ make check
 
 > `pnpm check` 会依次执行：**代码格式检查 (Prettier) → 静态代码检查 (ESLint) → TypeScript 类型检查 (`tsc --noEmit`) → 单元测试与 60% 覆盖率门禁 (Vitest) → 生产构建验证 (`next build`)**。只要其中任何一步报错，AI 必须自行修复直至全部绿灯通过！
 
+> **自检全绿 ≠ 可以推送**：自检通过后应向开发者汇报并等待明确确认。本节**不授权** AI 自行 `git commit` / `git push` / 创建 PR，闸口规则见第 7 节 Step 3。
+
 ---
 
 ## 7. 从拉分支到阿里云自动部署的全流程 SOP（任何 AI 接手必读）
@@ -116,7 +119,9 @@ make check
 ```mermaid
 flowchart LR
     A["Step 1: 先建单再切分支\nGitHub 真实 Issue #N\nfeature/N-slug"] --> B["Step 2: 编码与单测\n修改 src/ 与 tests/\n运行 pnpm check"]
-    B --> C["Step 3: 推送与提 PR\ngit push 推分支\n向 develop 提 PR"]
+    B --> G{"人工确认闸口\nAI 汇报改动\n等待开发者明确确认"}
+    G -->|未确认| W["停在原地\n不提交 / 不推送 / 不建 PR"]
+    G -->|确认后| C["Step 3: 确认后提交推送\ngit commit / git push\n向 develop 提 PR"]
     C --> D["Step 4: CI 门禁与合并\nci.yml 自动校验\nSquash Merge 入 develop"]
     D --> E["Step 5: 自动部署测试服\ncd-test.yml 自动打包\n直推阿里云 ECS :3001"]
     E --> F["Step 6: 正式发版上线\n合入 main 并打 Tag vX.Y.Z\nrelease.yml 直推阿里云 :3000"]
@@ -141,9 +146,14 @@ git checkout -b feature/<真实issue编号>-<英文短横线简述>
 ### Step 2：编写代码、补充单元测试并跑通本地门禁
 - 修改业务代码后，若涉及 `src/lib/` 核心纯函数，必须在 `tests/` 下补充单元测试，确保覆盖率 `>= 60%`。
 - 执行 `pnpm check`，确保 Prettier、ESLint、`tsc --noEmit`、Vitest 覆盖率、`next build` 全部通过。
+- **自检全绿后在此停住**：向开发者汇报改动并等待明确确认，不得自行进入 Step 3。
 
-### Step 3：提交代码并推送到 GitHub 远端
+### Step 3：**收到开发者确认后**才提交代码并推送到 GitHub 远端
+
+> **硬性闸口（默认禁止）**：AI 完成 Step 2 后，必须先汇报「分支名 + Issue 编号 + 改动文件 + `pnpm check` 结果」，**收到开发者明确确认**才能执行下面的命令。自检全绿、SOP 写了提交推送、或「流程上顺手」都不构成授权。未收到确认时，代码保留在本地工作区：**不提交、不推送、不创建 PR**。PR 合并、测试服验收、打 Tag 与发版由开发者本人操作。
+
 ```bash
+# 仅在收到开发者明确确认后执行
 git add <修改的文件>
 git commit -m "feat(scope): short description (#<issue编号>)"
 git push -u origin feature/<issue编号>-<英文短横线简述>
@@ -151,6 +161,8 @@ git push -u origin feature/<issue编号>-<英文短横线简述>
 > **网络环境提示（Windows 开发机）**：若在开发者 Windows 本机执行 `git push` 或调用 GitHub API 遇到网络超时，可附带本地代理参数：`git -c http.proxy=http://127.0.0.1:7897 push ...` 或 `curl.exe -x http://127.0.0.1:7897 ...`。
 
 ### Step 4：创建 Pull Request 至 `develop` 并通过云端 CI 门禁
+> 建 PR 同样需开发者确认（或由开发者本人创建）；Squash Merge 仅由开发者本人执行。
+
 - 向 `develop` 分支发起 Pull Request（遵循 `.github/pull_request_template.md` 并在正文中写明 `Closes #<issue编号>`）。
 - `.github/workflows/ci.yml` 会自动执行云端门禁校验；全绿通过后使用 **Squash and merge** 合并入 `develop`（仓库已配置自动删除已合并的功能分支）。
 
